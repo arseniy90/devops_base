@@ -1,0 +1,5 @@
+FROM postgres:18-alpine
+
+VOLUME /var/lib/postgresql
+
+EXPOSE 5432
