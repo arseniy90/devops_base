@@ -91,7 +91,7 @@ kubectl get all
 
 5. Проверка БД
 
-Проверил подключение к БД
+Проверил подключение к БД (лучше через имя пода)
 
 kubectl exec -it deploy/postgres -- psql -U admin -d mydb -c "SELECT version();"
 
@@ -123,5 +123,103 @@ kubectl exec -it deploy/postgres -- psql -U admin -d mydb -c "SELECT * FROM test
 
 Все ок!
 
+Часть2.
 
- 
+1. Создание директории Helm-чарта
+
+helm create pg-hc
+
+А также отмечаем, что не надо использовать '_' в именах.
+
+2. Создание YAML-конфигураций с шаблонами
+
+Использовал разные сущности в шаблонах:
+
+- .Values - внешние настройки
+  
+- .Release - данные об установке
+  
+- include вместе с _helpers.tpl - повторное использование
+
+Опробовал if условие для корректной установки порта
+
+3. Создание релиза
+
+helm install pg-dev ./pg-hc
+
+<img width="329" height="111" alt="image" src="https://github.com/user-attachments/assets/9db85f0d-e5cd-4daf-9145-abd845901d86" />
+
+4. Проверка БД
+
+minikube service pg-dev-pg-hc
+
+<img width="739" height="226" alt="image" src="https://github.com/user-attachments/assets/f48e3214-476f-46c4-8f99-3b3292340d1a" />
+
+Порт 30001 - значение из values.yaml корректно подставилось в шаблоне
+
+Проверил таблицу в БД, я ведь ее ранее создавал
+
+kubectl exec -it <pod_name> -- psql -U admin -d mydb -c "SELECT * FROM test_table;"
+
+<img width="360" height="64" alt="image" src="https://github.com/user-attachments/assets/e033e08f-8344-4fa3-af19-e2d056a74c5a" />
+
+Подключение к БД есть, а таблицы нет(((
+
+5. Фикс и апгрейд
+
+В volume исправил имя в metadata и слелал upgrade
+
+helm upgrade pg-dev ./pg-hc
+
+и получил это.....
+
+<img width="1107" height="61" alt="image" src="https://github.com/user-attachments/assets/e41c2fa3-af09-432c-b876-014270be38f4" />
+
+Все очень плохо....за что мне это?
+
+В ошибке есть подсказка с причиной, и что нужно исправить, нашел такой вариант:
+
+ - Добавить аннотацию с именем релиза
+    
+ - Добавить аннотацию с пространством имен
+    
+ - Добавить метку, что ресурсом управляет Helm
+
+kubectl annotate pvc postgres-pvc meta.helm.sh/release-name=pg-dev --overwrite
+
+kubectl annotate pvc postgres-pvc meta.helm.sh/release-namespace=default --overwrite
+
+kubectl label pvc postgres-pvc app.kubernetes.io/managed-by=Helm --overwritepersistentvolumeclaim/postgres-pvc annotated
+
+Снова upgrade
+
+helm upgrade pg-dev ./pg-hc
+
+<img width="408" height="129" alt="image" src="https://github.com/user-attachments/assets/d403efe9-287f-4ada-8ebd-00d322859140" />
+
+Проверил таблицу в БД, яведь ее ранее создавал
+
+kubectl exec -it <pod_name> -- psql -U admin -d mydb -c "SELECT * FROM test_table;"
+
+<img width="233" height="64" alt="image" src="https://github.com/user-attachments/assets/fc9ad550-1973-489c-a3f7-689cf036c8b9" />
+
+Все ок!
+
+Часть 3
+
+1. Шаблонизация в Helm:  меняем нужные переменные в values.yaml
+
+2. Версионирование и история релизов
+
+helm history pg-dev
+
+3. Удобный откат
+
+Да rollback тоже опробовал 
+
+helm rollback pg-dev 1
+
+<img width="914" height="79" alt="image" src="https://github.com/user-attachments/assets/2677c4f8-4db9-4e66-b7a4-fbbfb9b8ddd8" />
+
+
+
