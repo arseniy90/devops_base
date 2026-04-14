@@ -1,0 +1,20 @@
+replicaCount: 1
+
+image:
+  repository: postgres
+  tag: 18-alpine
+
+postgres:
+  db: "mydb"
+  user: "admin"
+  secretName: "postgres-secret"
+  secretKey: "password"
+
+persistence:
+  accessMode: ReadWriteOnce
+  size: 1Gi
+
+service:
+  type: NodePort
+  port: 5432
+  nodePort: 30001
