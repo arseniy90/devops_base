@@ -62,7 +62,46 @@ jobs:
       - name: Generate Coverage Report
         run: go test -v -coverprofile=coverage.out ./...
       - name: Upload Coverage Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: code-coverage
           path: hw4_cicd/coverage.out
+
+  build:
+    name: Build
+    needs: test
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: ./hw4_cicd
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.25'
+          cache: true
+          cache-dependency-path: hw4_cicd/go.mod
+      - name: Build Binary
+        run: go build -ldflags="-s -w" -v -o app ./cmd/main.go
+      - name: Upload Binary Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-binary
+          path: hw4_cicd/app
+
+  security:
+    name: Security Scan
+    needs: test
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: ./hw4_cicd
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.25'
+          cache: true
+          cache-dependency-path: hw4_cicd/go.mod
+      - name: Run Govulncheck
+        run: go install golang.org/x/vuln/cmd/govulncheck@latest && govulncheck ./...
