@@ -47,7 +47,7 @@ jobs:
 
   coverage:
     name: Run Test Coverage
-    needs: test
+    needs: lint
     runs-on: ubuntu-24.04
     defaults:
       run:
@@ -73,7 +73,7 @@ jobs:
 
   build:
     name: Build
-    needs: test
+    needs: [test, coverage]
     runs-on: ubuntu-24.04
     defaults:
       run:
@@ -95,7 +95,7 @@ jobs:
 
   security:
     name: Security Scan
-    needs: test
+    needs: build
     runs-on: ubuntu-24.04
     defaults:
       run:
