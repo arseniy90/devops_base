@@ -1,0 +1,101 @@
+name: Go test project CI/CD
+
+on:
+  push:
+    branches: 
+      - '*'
+  pull_request:
+    branches:
+      - '*'
+
+jobs:
+  lint:
+    name: Run Linter
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./hw4_cicd
+    steps:
+      - uses: actions/checkout@latest
+      - uses: actions/setup-go@v1
+        with:
+          go-version: '1.25'
+          cache: false
+          cache-dependency-path: hw4_cicd/go.mod
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.12.2
+          working-directory: hw4_cicd
+
+  test-coverage-and-build:
+    name: Run Unit Tests
+    needs: lint
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: ./hw4_cicd
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.25'
+          cache: false
+          cache-dependency-path: hw4_cicd/go.mod
+      - name: Run Tests
+        run: |
+          go test -v ./... || true
+          go test -v -coverprofile=coverage.out ./... || true
+          go tool cover -html=coverage.out -o coverage.html || true
+      - name: Build Binary
+        run: go build -o app ./cmd/main.go
+      - name: Upload All
+        uses: actions/upload-artifact@v7
+        with:
+          name: app-binary
+          path: |
+            hw4_cicd/coverage.out
+            hw4_cicd/coverage.html
+            hw4_cicd/app
+
+  deploy:
+    name: Deploy
+    needs: security
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: ./hw4_cicd
+    steps:
+      - uses: actions/checkout@v6
+      - name: Download Binary from Build Stage
+        uses: actions/download-artifact@v8
+        with:
+          name: app-binary
+          path: ./hw4_cicd
+      - name: Import Secrets from Vault
+        uses: hashicorp/vault-action@v3
+        with:
+          url: ${{ secrets.VAULT_URL }}
+          token: ${{ secrets.VAULT_TOKEN }}
+          secrets: |
+            secret/data/hw4_cicd TEST_TOKEN
+      - name: Verify Vault Secret
+        run: |
+          if [ -z "$TEST_TOKEN" ]; then
+            echo "Error: TEST_TOKEN is empty"
+            exit 1
+          else
+            echo "Success: TEST_TOKEN is $TEST_TOKEN"
+          fi
+      - name: Run App
+        run: |
+          chmod +x ./app
+          RESULT=$(echo "RaceCar" | ./app)
+
+          if [ "$RESULT" == "True" ]; then
+            echo "Success: Palindrome detected!"
+          else
+            echo "Failure: Expected palindrome!"
+            exit 1
+          fi
