@@ -58,10 +58,28 @@ jobs:
             hw4_cicd/coverage.html
             hw4_cicd/app
 
+  security:
+    name: Security Scan
+    needs: build
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: ./hw4_cicd
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.25'
+          cache: true
+          cache-dependency-path: hw4_cicd/go.mod
+      - name: Run Govulncheck
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@v1
+          govulncheck ./...
+
   deploy:
     name: Deploy
     needs: security
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-24.04
     defaults:
       run:

@@ -1,0 +1,167 @@
+name: Go test project CI/CD
+
+on:
+  push:
+    branches: 
+      - '*'
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  lint:
+    name: Linter
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: ./hw4_cicd
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.25'
+          cache: true
+          cache-dependency-path: hw4_cicd/go.mod
+      - name: Download Dependencies
+        run: go mod download
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.12.2
+          working-directory: hw4_cicd
+          skip-cache: true
+
+  test:
+    name: Unit Tests
+    needs: lint
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: ./hw4_cicd
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.25'
+          cache: true
+          cache-dependency-path: hw4_cicd/go.mod
+      - name: Download Dependencies
+        run: go mod download
+      - name: Run Tests with Race Detector
+        run: go test -v -race ./...
+
+  coverage:
+    name: Test Coverage
+    needs: lint
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: ./hw4_cicd
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.25'
+          cache: true
+          cache-dependency-path: hw4_cicd/go.mod
+      - name: Download Dependencies
+        run: go mod download
+      - name: Generate Coverage Report
+        run: go test -v -coverprofile=coverage.out ./...
+      - name: Convert Profile to HTML
+        run: go tool cover -html=coverage.out -o coverage.html
+      - name: Upload Coverage Artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: code-coverage
+          path: |
+            hw4_cicd/coverage.out
+            hw4_cicd/coverage.html
+
+  build:
+    name: Build
+    needs: [test, coverage]
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: ./hw4_cicd
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.25'
+          cache: true
+          cache-dependency-path: hw4_cicd/go.mod
+      - name: Download Dependencies
+        run: go mod download
+      - name: Build Binary
+        run: go build -ldflags="-s -w" -v -o app ./cmd/main.go
+      - name: Upload Binary Artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: app-binary
+          path: hw4_cicd/app
+
+  security:
+    name: Security Scan
+    needs: build
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: ./hw4_cicd
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.25'
+          cache: true
+          cache-dependency-path: hw4_cicd/go.mod
+      - name: Download Dependencies
+        run: go mod download
+      - name: Run Govulncheck
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@v1
+          govulncheck ./...
+
+  deploy:
+    name: Deploy
+    needs: security
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-24.04
+    environment: test_prod
+    defaults:
+      run:
+        working-directory: ./hw4_cicd
+    steps:
+      - uses: actions/checkout@v6
+      - name: Download Binary from Build Stage
+        uses: actions/download-artifact@v8
+        with:
+          name: app-binary
+          path: ./hw4_cicd
+      - name: Import Secrets from Vault
+        uses: hashicorp/vault-action@v3
+        with:
+          url: ${{ secrets.VAULT_URL }}
+          token: ${{ secrets.VAULT_TOKEN }}
+          secrets: |
+            secret/data/hw4_cicd TEST_TOKEN
+      - name: Verify Vault Secret
+        run: |
+          if [ -z "$TEST_TOKEN" ]; then
+            echo "Error: TEST_TOKEN is empty"
+            exit 1
+          else
+            echo "Success: TEST_TOKEN length is ${#TEST_TOKEN}"
+          fi
+      - name: Run App
+        run: |
+          chmod +x ./app
+          RESULT=$(echo "RaceCar" | ./app)
+
+          if [ "$RESULT" == "True" ]; then
+            echo "Success: Palindrome detected!"
+          else
+            echo "Failure: Expected palindrome!"
+            exit 1
+          fi
