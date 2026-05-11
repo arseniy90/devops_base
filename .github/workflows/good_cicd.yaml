@@ -22,12 +22,14 @@ jobs:
           go-version: '1.25'
           cache: true
           cache-dependency-path: hw4_cicd/go.mod
+      - name: Download Dependencies
+        run: go mod download
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v9
         with:
           version: v2.12.2
           working-directory: hw4_cicd
-          skip-pkg-cache: true
+          skip-cache: true
 
   test:
     name: Unit Tests
@@ -43,6 +45,8 @@ jobs:
           go-version: '1.25'
           cache: true
           cache-dependency-path: hw4_cicd/go.mod
+      - name: Download Dependencies
+        run: go mod download
       - name: Run Tests with Race Detector
         run: go test -v -race ./...
 
@@ -60,6 +64,8 @@ jobs:
           go-version: '1.25'
           cache: true
           cache-dependency-path: hw4_cicd/go.mod
+      - name: Download Dependencies
+        run: go mod download
       - name: Generate Coverage Report
         run: go test -v -coverprofile=coverage.out ./...
       - name: Convert Profile to HTML
@@ -86,6 +92,8 @@ jobs:
           go-version: '1.25'
           cache: true
           cache-dependency-path: hw4_cicd/go.mod
+      - name: Download Dependencies
+        run: go mod download
       - name: Build Binary
         run: go build -ldflags="-s -w" -v -o app ./cmd/main.go
       - name: Upload Binary Artifact
@@ -108,6 +116,8 @@ jobs:
           go-version: '1.25'
           cache: true
           cache-dependency-path: hw4_cicd/go.mod
+      - name: Download Dependencies
+        run: go mod download
       - name: Run Govulncheck
         run: |
           go install golang.org/x/vuln/cmd/govulncheck@v1
